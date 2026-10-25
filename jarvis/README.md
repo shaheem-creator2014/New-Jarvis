@@ -135,3 +135,7 @@ References: [Google native OAuth](https://developers.google.com/identity/protoco
 ### General questions and document search
 
 Conversation mode answers general questions using the selected local model; demo mode does not disable general conversation. File search mode and `/search` explicitly search indexed documents. Conversational document retrieval is reserved for requests referring to notes, files, documents, or saved projects/code. General questions such as football facts, maths and coding should not be replaced by an empty document search. Current statistics still require a dated, verified public source through an approved research provider. The default 1B model has limited accuracy and reasoning; this application does not make it equivalent to ChatGPT.
+
+### Reliable basic arithmetic
+
+In Conversation mode, direct arithmetic such as `199 × 599`, `What is 0.1 + 0.2?`, or `Calculate (12 + 8) / 5` uses a bounded local calculator before Ollama. It supports numbers, parentheses, +, -, multiplication, division, modulo, and bounded integer powers. Fractions are calculated exactly internally; rounded decimal output is labeled approximate. Errors do not fall back to a guessed model answer. This is not a general symbolic mathematics or word-problem solver; other maths explanations still depend on the model.

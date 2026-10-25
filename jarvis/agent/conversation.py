@@ -5,6 +5,7 @@ import time
 from collections import deque
 from .ai import AIUnavailable, Ollama, document_search_requested
 from .memory import MemoryStore
+from .calculator import calculate
 from .integrations import Integrations, IntegrationError
 from .voice import ElevenLabs, VoiceError, speech_text
 from .tools import execute_action, limited_command, plan_day, result, search_brain, validate_action
@@ -87,7 +88,10 @@ class Assistant:
                       ok=True, tool=action, confirmation={'token': token, 'action': action, 'argument': argument, 'expires_in': CONFIRM_TTL})
 
     def process(self, session, text, mode):
-        if text.split(' ',1)[0] in {'/remember','/memory','/recall'}:
+        arithmetic = calculate(text) if mode != 'search' else None
+        if arithmetic is not None:
+            outcome = arithmetic
+        elif text.split(' ',1)[0] in {'/remember','/memory','/recall'}:
             command, _, argument = text.partition(' ')
             outcome = self.memory_proposal(argument) if command=='/remember' else self.memory.list(argument if command=='/recall' else '')
             outcome['engine'] = 'Explicit memory command (no AI reasoning)'
