@@ -131,3 +131,7 @@ Real Ollama inference/model downloads, ElevenLabs recognition/synthesis, real Gm
 The optional regression `python tests/browser_voice_check.py` uses an **already installed** Playwright/Chromium and a running dashboard. It creates/deletes synthetic tone fixtures, uses provider doubles and checks late-result interruption. It never installs tooling or calls ElevenLabs. `JARVIS_TEST_BROWSER` can select an existing Chromium executable.
 
 References: [Google native OAuth](https://developers.google.com/identity/protocols/oauth2/native-app), [Gmail messages](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages), [Calendar events](https://developers.google.com/workspace/calendar/api/v3/reference/events/list), [ElevenLabs SDK reference](https://github.com/elevenlabs/elevenlabs-python).
+
+### General questions and document search
+
+Conversation mode answers general questions using the selected local model; demo mode does not disable general conversation. File search mode and `/search` explicitly search indexed documents. Conversational document retrieval is reserved for requests referring to notes, files, documents, or saved projects/code. General questions such as football facts, maths and coding should not be replaced by an empty document search. Current statistics still require a dated, verified public source through an approved research provider. The default 1B model has limited accuracy and reasoning; this application does not make it equivalent to ChatGPT.

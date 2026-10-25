@@ -3,7 +3,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from .ai import AIUnavailable, Ollama
+from .ai import AIUnavailable, Ollama, document_search_requested
 from .memory import MemoryStore
 from .integrations import Integrations, IntegrationError
 from .voice import ElevenLabs, VoiceError, speech_text
@@ -109,7 +109,14 @@ class Assistant:
                 reply = self.ai.respond(self.history(session), text, mode=mode)
                 action, argument = reply['action'], reply['argument']
                 if action == 'search_brain':
-                    outcome = search_brain(self.index, argument)
+                    if document_search_requested(text):
+                        outcome = search_brain(self.index, argument)
+                    else:
+                        # Fail closed if a model ignores its narrowed action schema.
+                        answer = self.ai.respond(self.history(session), text, mode='answer')
+                        if answer['action'] != 'none':
+                            raise AIUnavailable('The model could not answer without selecting an unrelated tool. No local search was performed; please try again.')
+                        outcome = result(answer['response'], tool='chat', ok=True)
                 elif action in {'open_website', 'windows_control'}:
                     outcome = self.propose(session, action, argument)
                 elif action in {'read_inbox','google_calendar','brief_me','research_web'}:

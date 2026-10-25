@@ -1,6 +1,7 @@
 """Bounded, local-only Ollama client. Never downloads models or runs tools."""
 import json
 import os
+import re
 import shutil
 import socket
 import urllib.error
@@ -15,6 +16,10 @@ REPLY_SCHEMA = {'type': 'object', 'properties': {
     'required': ['response', 'action', 'argument'], 'additionalProperties': False}
 
 MAX_RESPONSE_BYTES = 256 * 1024
+
+def document_search_requested(text):
+    """Restrict document retrieval to a stated local-source intent, not world facts."""
+    return bool(re.search(r"\b(notes?|files?|documents?|indexed|knowledge base|knowledge folder|my code|my robotics code|my projects?)\b", text, re.I))
 
 class AIUnavailable(RuntimeError):
     pass
@@ -71,10 +76,19 @@ class Ollama:
         instructions = self.prompt + ("\nCurrent source: FICTIONAL DEMO. Never treat these notes as real clients, events or commitments." if self.demo else "\nCurrent source: explicitly approved local knowledge. Only cited retrieved facts are known. Use account tools to discover their availability; never assume a connected account.")
         if mode == 'robotics':
             instructions += '\nThis turn is robotics assistance: explain code and concepts. Return action=none. Never upload firmware or operate hardware.'
-        messages = [{'role': 'system', 'content': instructions}, *history,
+        schema = REPLY_SCHEMA
+        if mode == 'answer':
+            instructions += '\nAnswer the user directly using conversation and general knowledge. Do not call tools. If a fact needs current verification, say so briefly; never invent a current figure.'
+            schema = {**REPLY_SCHEMA, 'properties': {**REPLY_SCHEMA['properties'],
+                      'action': {'type': 'string', 'enum': ['none']}}}
+        elif not document_search_requested(text):
+            instructions += '\nThis message does not request local documents. Answer general questions directly; do not use search_brain. Current statistics require dated, verified public sources, not fictional demo notes.'
+            schema = {**REPLY_SCHEMA, 'properties': {**REPLY_SCHEMA['properties'],
+                      'action': {'type': 'string', 'enum': [a for a in ACTIONS if a != 'search_brain']}}}
+        messages = [{'role': 'system' , 'content': instructions}, *history,
                     {'role': 'user', 'content': text}]
         result = self._request('/api/chat', {'model': self.model, 'messages': messages,
-                    'stream': False, 'format': REPLY_SCHEMA, 'keep_alive': '5m',
+                    'stream': False, 'format': schema, 'keep_alive': '5m',
                     'options': {'num_ctx': 4096, 'num_predict': 384, 'temperature': 0.25}}, timeout=180)
         try:
             reply = json.loads(result['message']['content'])
@@ -87,7 +101,7 @@ class Ollama:
                 raise ValueError('Invalid response fields')
             if action not in {'none', 'search_brain', 'open_website', 'windows_control', 'plan_day', 'read_inbox', 'google_calendar', 'brief_me', 'research_web', 'remember', 'recall_memory'}:
                 raise ValueError('Unsupported action')
-            if mode == 'robotics' and action != 'none':
+            if mode in {'robotics', 'answer'} and action != 'none':
                 raise ValueError('Robotics responses cannot launch tools')
             if action == 'none' and not response.strip():
                 raise ValueError('Empty response')

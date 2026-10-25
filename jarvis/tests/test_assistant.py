@@ -60,6 +60,24 @@ class AssistantTests(unittest.TestCase):
         self.assertIn(reply['results'][0]['filename'], self.index.documents)
         self.assertNotIn('not used', reply['spoken'])
 
+    def test_general_question_cannot_be_replaced_by_file_search(self):
+        replies = [
+            {'action': 'search_brain', 'argument': 'CR7 total goals', 'response': ''},
+            {'action': 'none', 'argument': '', 'response': 'A current total needs a dated public source, Shaheem.'}]
+        with patch.object(self.fake, 'respond', side_effect=replies) as respond, patch('agent.conversation.search_brain') as search:
+            outcome = self.assistant.process(self.session, 'CR7 total goals', 'chat')
+        search.assert_not_called()
+        self.assertEqual(outcome['tool'], 'chat')
+        self.assertIn('dated public source', outcome['spoken'])
+        self.assertEqual(respond.call_args.kwargs['mode'], 'answer')
+
+    def test_general_question_repeated_bad_routing_does_not_search(self):
+        self.fake.reply.update(action='search_brain', argument='gravity')
+        with patch('agent.conversation.search_brain') as search:
+            outcome = self.assistant.process(self.session, 'What is gravity?', 'chat')
+        search.assert_not_called()
+        self.assertFalse(outcome['ok'])
+
     def test_open_requires_confirmation_then_single_use(self):
         self.fake.reply.update(action='windows_control', argument='vscode', response='Opened!')
         with patch('agent.conversation.execute_action', return_value={'spoken':'Test launch accepted', 'ok':True}) as launch:
@@ -182,6 +200,16 @@ class OllamaTransportTests(unittest.TestCase):
         self.assertEqual(self.requests[-1]['format']['properties']['action']['enum'][0], 'none')
         self.assertEqual(self.requests[-1]['options']['num_ctx'], 4096)
         self.assertEqual(self.requests[-1]['model'],'llama3.2:1b')
+
+    def test_general_and_local_questions_have_distinct_tool_scopes(self):
+        client=Ollama();client.base=f'http://127.0.0.1:{self.server.server_port}'
+        for question in ['CR7 total goals', 'What is gravity?', 'Explain Python loops', '1+1?']:
+            client.respond([], question)
+            self.assertNotIn('search_brain', self.requests[-1]['format']['properties']['action']['enum'])
+        client.respond([], 'Find my ESP32 notes')
+        self.assertIn('search_brain', self.requests[-1]['format']['properties']['action']['enum'])
+        client.respond([], 'CR7 total goals', mode='answer')
+        self.assertEqual(self.requests[-1]['format']['properties']['action']['enum'], ['none'])
 
     def test_unavailable_and_invalid_output(self):
         client=Ollama()
