@@ -7,6 +7,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 from .data import PROJECT
+from .ai import CHAT_MODES
 from .conversation import Assistant, BusyError
 from .voice import VoiceError, decode_recording
 from .integrations import IntegrationError
@@ -161,7 +162,7 @@ def make_server(index, port=8765, assistant=None):
             self.close_connection = True
             if not self.valid_request():
                 return self.respond(403, {'error': 'Local same-origin requests only'})
-            if self.path not in {'/api/chat', '/api/confirm', '/api/plan', '/api/clear', '/api/voice/transcribe', '/api/voice/speak', '/api/oauth/begin', '/api/oauth/disconnect', '/api/integrations/run', '/api/memory/run'}:
+            if self.path not in {'/api/chat', '/api/model', '/api/confirm', '/api/plan', '/api/clear', '/api/voice/transcribe', '/api/voice/speak', '/api/oauth/begin', '/api/oauth/disconnect', '/api/integrations/run', '/api/memory/run'}:
                 return self.respond(405, {'error': 'Unsupported operation'})
             if self.headers.get('Content-Type') != 'application/json' or self.headers.get('Transfer-Encoding'):
                 return self.respond(415, {'error': 'Use application/json with Content-Length'})
@@ -230,9 +231,13 @@ def make_server(index, port=8765, assistant=None):
                         raise ValueError('Supply a completed response job and explicit approval')
                     assistant.voice.authorize(body['approved'], tts=True)
                     operation = lambda: assistant.speak(identifier, body['job'], body['approved'])
+                elif self.path == '/api/model':
+                    if set(body) != {'model'} or not isinstance(body['model'], str) or not 1 <= len(body['model']) <= 200:
+                        raise ValueError('Supply only the installed model name')
+                    operation = lambda: assistant.select_model(body['model'])
                 elif self.path == '/api/chat':
-                    if set(body) != {'text', 'mode'} or body['mode'] not in {'chat', 'search', 'robotics'} or not isinstance(body['text'], str) or not 1 <= len(body['text'].strip()) <= 4000:
-                        raise ValueError('Supply text (1–4000 characters) and mode (chat, search or robotics)')
+                    if set(body) != {'text', 'mode'} or body['mode'] not in CHAT_MODES or not isinstance(body['text'], str) or not 1 <= len(body['text'].strip()) <= 4000:
+                        raise ValueError('Supply text (1–4000 characters) and a supported conversation or subject mode')
                     operation = lambda: assistant.process(session, body['text'].strip(), body['mode'])
                 elif self.path == '/api/confirm':
                     if set(body) != {'token', 'approved'} or not isinstance(body['token'], str) or len(body['token']) > 100 or type(body['approved']) is not bool:

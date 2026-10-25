@@ -140,6 +140,11 @@ class Assistant:
         self.remember_turn(session, text, outcome)
         return outcome
 
+    def select_model(self, name):
+        selected = self.ai.select_model(name)
+        return result(f'Using {selected}, Shaheem. Selection applies to all tabs until restart. No model was downloaded.',
+                      ok=True, tool='model_selection', model=selected)
+
     def submit(self, identifier, session, operation):
         if not self.worker.acquire(blocking=False):
             raise BusyError('JARVIS is processing another request. Please wait before retrying.')
@@ -160,6 +165,8 @@ class Assistant:
             outcome = result('Request interrupted', ok=False)
             try:
                 outcome = operation()
+            except AIUnavailable as error:
+                outcome = result(str(error), ok=False, tool='chat')
             except IntegrationError as error:
                 outcome = result(str(error), ok=False, tool='integration', error_code=error.code)
             except VoiceError as error:

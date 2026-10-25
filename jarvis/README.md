@@ -139,3 +139,11 @@ Conversation mode answers general questions using the selected local model; demo
 ### Reliable basic arithmetic
 
 In Conversation mode, direct arithmetic such as `199 × 599`, `What is 0.1 + 0.2?`, or `Calculate (12 + 8) / 5` uses a bounded local calculator before Ollama. It supports numbers, parentheses, +, -, multiplication, division, modulo, and bounded integer powers. Fractions are calculated exactly internally; rounded decimal output is labeled approximate. Errors do not fall back to a guessed model answer. This is not a general symbolic mathematics or word-problem solver; other maths explanations still depend on the model.
+
+### General assistance and subject modes
+
+Use **Conversation** for ordinary questions on any topic, or select Football, Maths tutor, Science, Geography, ICT, Coding, or Robotics for focused explanations. These modes provide guidance to the same local model; they are not separate trained experts and do not guarantee accuracy. Coding mode has a larger response budget, preserves code formatting, and accepts multiline messages: Enter sends, Shift+Enter adds a line. Code is displayed as text and never executed. Ask for one function or section at a time for long answers.
+
+The **AI model** button lists installed Ollama models and lets you select one for all local tabs until restart. It never downloads a model or contacts a cloud AI provider. The default `llama3.2:1b` is suited to lightweight use but has limited reasoning and factual accuracy. If you choose to download a larger model yourself, `ollama pull llama3.2:3b` is one option; expect more RAM use and potentially slow responses on an 8 GB machine. Refresh models afterwards, select it, and click **Use selected model**. No larger model was installed or benchmarked by this project.
+
+To preserve your choice across restarts, put `JARVIS_MODEL=llama3.2:3b` (or your exact installed model name) in your private `.env`, or set the process environment variable. A larger model still makes mistakes. Calculator results cover direct arithmetic, not every word problem or symbolic proof. Current football totals, transfers, live results, news and other changing facts require explicitly approved research; demo mode blocks live integrations. Test any important code and check important facts against trustworthy sources.

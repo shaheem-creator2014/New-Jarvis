@@ -211,6 +211,36 @@ class OllamaTransportTests(unittest.TestCase):
         client.respond([], 'CR7 total goals', mode='answer')
         self.assertEqual(self.requests[-1]['format']['properties']['action']['enum'], ['none'])
 
+    def test_subject_guidance_and_bounded_answer_only_schema(self):
+        from agent.ai import SUBJECTS
+        client=Ollama();client.base=f'http://127.0.0.1:{self.server.server_port}'
+        questions = {'football':'Explain offside', 'maths':'Explain quadratic equations',
+                     'science':'Why does ice float?', 'geography':'What causes monsoons?',
+                     'ict':'Explain TCP and UDP', 'coding':'Write a Python function',
+                     'robotics':'Explain a pull-up resistor'}
+        for mode, question in questions.items():
+            with self.subTest(mode=mode):
+                client.respond([],question,mode=mode)
+                request=self.requests[-1]
+                self.assertIn(SUBJECTS[mode],request['messages'][0]['content'])
+                self.assertEqual(request['format']['properties']['action']['enum'],['none'])
+                self.assertEqual(request['options']['num_predict'],1536 if mode=='coding' else 768)
+                self.assertIn('Today in Sri Lanka:',request['messages'][0]['content'])
+
+    def test_select_only_installed_model_without_download(self):
+        client=Ollama()
+        with patch.object(client,'_request',return_value={'models':[{'name':'llama3.2:1b'},{'name':'installed:test'}]}) as request:
+            self.assertEqual(client.select_model('installed:test'),'installed:test')
+            with self.assertRaises(ValueError):client.select_model('missing:model')
+            self.assertEqual(client.model,'installed:test')
+            self.assertTrue(all(call.args[0]=='/api/tags' for call in request.call_args_list))
+
+    def test_truncated_answers_are_not_accepted_as_tool_actions(self):
+        client=Ollama()
+        with patch.object(client,'_request',return_value={'done_reason':'length', 'message':{'content':'{"action":"open_website"'}}):
+            with self.assertRaisesRegex(AIUnavailable,'length limit'):
+                client.respond([], 'Hello')
+
     def test_unavailable_and_invalid_output(self):
         client=Ollama()
         with patch.object(client,'_request',side_effect=AIUnavailable('Unavailable')):

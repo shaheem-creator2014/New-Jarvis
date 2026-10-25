@@ -3,6 +3,7 @@ import json
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from agent.ai import AIUnavailable
 from agent.conversation import Assistant
 from agent.data import selected_source
@@ -95,3 +96,30 @@ class ChatAPITests(unittest.TestCase):
         self.assertEqual(status,202)
         self.assertEqual(self.finish(accepted['job'],headers)['priorities'],tasks)
         self.assertEqual(self.post('/api/plan',{'tasks':[]},headers)[0],400)
+
+    def test_subject_modes_reach_assistant_without_schema_errors(self):
+        headers=self.session()
+        for mode in ['football','maths','science','geography','ict','coding']:
+            status,_,accepted=self.post('/api/chat',{'text':'Explain this topic','mode':mode},headers)
+            self.assertEqual(status,202)
+            outcome=self.finish(accepted['job'],headers)
+            self.assertIn('Ollama unavailable',outcome['spoken'])
+
+    def test_model_selection_requires_csrf_and_strict_schema(self):
+        headers=self.session()
+        with patch.object(self.assistant.ai,'select_model',return_value='installed:test',create=True) as select:
+            self.assertEqual(self.post('/api/model',{'model':'installed:test'},{'Content-Type':'application/json'})[0],403)
+            for payload in [{'model':[]},{'model':'x','download':True},{'model':''}]:
+                self.assertEqual(self.post('/api/model',payload,headers)[0],400)
+            select.assert_not_called()
+            status,_,accepted=self.post('/api/model',{'model':'installed:test'},headers)
+            self.assertEqual(status,202)
+            self.assertEqual(self.finish(accepted['job'],headers)['model'],'installed:test')
+            select.assert_called_once_with('installed:test')
+
+    def test_calculator_works_over_http_without_model(self):
+        headers=self.session()
+        status,_,accepted=self.post('/api/chat',{'text':'199 × 599','mode':'maths'},headers)
+        self.assertEqual(status,202)
+        outcome=self.finish(accepted['job'],headers)
+        self.assertEqual(outcome['calculation']['result'],'119,201')
