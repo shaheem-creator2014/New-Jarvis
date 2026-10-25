@@ -179,6 +179,8 @@ class OllamaTransportTests(unittest.TestCase):
         self.assertEqual(response['response'],'Protocol test only')
         self.assertEqual(self.requests[-1]['messages'][-2]['content'],'Earlier topic')
         self.assertFalse(self.requests[-1]['stream'])
+        self.assertEqual(self.requests[-1]['format']['properties']['action']['enum'][0], 'none')
+        self.assertEqual(self.requests[-1]['options']['num_ctx'], 4096)
         self.assertEqual(self.requests[-1]['model'],'llama3.2:1b')
 
     def test_unavailable_and_invalid_output(self):
@@ -187,4 +189,15 @@ class OllamaTransportTests(unittest.TestCase):
             self.assertFalse(client.status()['connected'])
         for text in ['not JSON', '{}', '{"response":"ok","action":"shell","argument":"cmd"}']:
             with patch.object(client,'_request',return_value={'message':{'content':text}}), self.assertRaises(AIUnavailable):
+                client.respond([], 'Hello')
+
+class OllamaErrorTests(unittest.TestCase):
+    def test_timeout_is_distinct_from_bad_json(self):
+        client = Ollama()
+        with patch.object(client.opener, 'open', side_effect=TimeoutError()):
+            with self.assertRaisesRegex(AIUnavailable, 'too long'):
+                client.respond([], 'Hello')
+        with patch.object(client.opener, 'open') as opened:
+            opened.return_value.__enter__.return_value.read.return_value = b'bad json'
+            with self.assertRaisesRegex(AIUnavailable, 'invalid JSON'):
                 client.respond([], 'Hello')

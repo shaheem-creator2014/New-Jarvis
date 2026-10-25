@@ -7,6 +7,13 @@ import urllib.error
 import urllib.request
 from .data import PROJECT
 
+ACTIONS = ['none', 'search_brain', 'open_website', 'windows_control', 'plan_day',
+           'read_inbox', 'google_calendar', 'brief_me', 'research_web', 'remember', 'recall_memory']
+REPLY_SCHEMA = {'type': 'object', 'properties': {
+    'response': {'type': 'string'}, 'action': {'type': 'string', 'enum': ACTIONS},
+    'argument': {'type': 'string'}},
+    'required': ['response', 'action', 'argument'], 'additionalProperties': False}
+
 MAX_RESPONSE_BYTES = 256 * 1024
 
 class AIUnavailable(RuntimeError):
@@ -38,7 +45,11 @@ class Ollama:
             if error.code == 404:
                 raise AIUnavailable(f'Model {self.model} is unavailable. Install it in Ollama only with your approval.') from error
             raise AIUnavailable(f'Ollama returned HTTP {error.code}; check its server logs.') from error
-        except (OSError, ValueError, socket.timeout) as error:
+        except (socket.timeout, TimeoutError) as error:
+            raise AIUnavailable('Ollama took too long to reply. Close other heavy apps and try a shorter message. The model may still be loading; limited commands still work.') from error
+        except ValueError as error:
+            raise AIUnavailable('Ollama returned invalid JSON data. Check its server logs; no action was taken.') from error
+        except OSError as error:
             raise AIUnavailable('Ollama is unavailable, timed out, or returned invalid data. Start Ollama and check the selected model. Limited commands still work.') from error
 
     def status(self):
@@ -63,8 +74,8 @@ class Ollama:
         messages = [{'role': 'system', 'content': instructions}, *history,
                     {'role': 'user', 'content': text}]
         result = self._request('/api/chat', {'model': self.model, 'messages': messages,
-                    'stream': False, 'format': 'json', 'keep_alive': '5m',
-                    'options': {'num_ctx': 8192, 'num_predict': 700, 'temperature': 0.25}}, timeout=90)
+                    'stream': False, 'format': REPLY_SCHEMA, 'keep_alive': '5m',
+                    'options': {'num_ctx': 4096, 'num_predict': 384, 'temperature': 0.25}}, timeout=180)
         try:
             reply = json.loads(result['message']['content'])
             if not isinstance(reply, dict) or set(reply) - {'response', 'action', 'argument'}:
