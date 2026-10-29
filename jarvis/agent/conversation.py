@@ -3,7 +3,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from .ai import AIUnavailable, Ollama, document_search_requested
+from .ai import AIUnavailable, Ollama, document_search_requested, coding_requested
 from .memory import MemoryStore
 from .calculator import calculate
 from .integrations import Integrations, IntegrationError
@@ -110,7 +110,14 @@ class Assistant:
             outcome['engine'] = 'Indexed file search (no AI reasoning)'
         else:
             try:
-                reply = self.ai.respond(self.history(session), text, mode=mode)
+                history = self.history(session)
+                coding = mode == 'coding' or (mode == 'chat' and coding_requested(text, history))
+                reply = self.ai.respond(history, text, mode='coding' if coding else mode)
+                if coding and reply['action'] != 'none':
+                    # Never validate a website/app argument or propose a tool for a code answer.
+                    reply = self.ai.respond(history, text, mode='coding')
+                    if reply['action'] != 'none':
+                        raise AIUnavailable('The local model did not produce a code answer. No website or application was opened; try asking for one small function at a time.')
                 action, argument = reply['action'], reply['argument']
                 if action == 'search_brain':
                     if document_search_requested(text):

@@ -34,6 +34,21 @@ def document_search_requested(text):
     """Restrict document retrieval to a stated local-source intent, not world facts."""
     return bool(re.search(r"\b(notes?|files?|documents?|indexed|knowledge base|knowledge folder|my code|my robotics code|my projects?)\b", text, re.I))
 
+def coding_requested(text, history=()):
+    """A response-only routing boundary, not permission to execute generated code."""
+    def explicit(message):
+        return ('```' in message or bool(re.search(
+            r'\b(write|create|generate|build|make|fix|debug|explain|refactor|implement|show|give)\b'
+            r'[\s\S]*\b(code|coding|script|function|program|website|webpage|web page|app|html|css|javascript|python|sql|arduino|esp32)\b',
+            message, re.I)) or bool(re.search(r'\b(?:can|could|please)\s+(?:you\s+)?code\b', message, re.I)))
+    if explicit(text):
+        return True
+    # Preserve a coding conversation for edits, without treating "open GitHub" as an edit.
+    if re.match(r'^(?:please\s+)?(?:add|change|fix|update|rewrite|continue|explain|make it|show (?:me )?(?:the )?(?:code|another))\b', text.strip(), re.I):
+        previous = next((item['content'] for item in reversed(history) if item.get('role') == 'user'), '')
+        return explicit(previous)
+    return False
+
 class AIUnavailable(RuntimeError):
     pass
 
@@ -97,6 +112,8 @@ class Ollama:
         return name
 
     def respond(self, history, text, *, mode='chat'):
+        if mode == 'chat' and coding_requested(text, history):
+            mode = 'coding'
         instructions = self.prompt + ("\nCurrent source: FICTIONAL DEMO. Never treat these notes as real clients, events or commitments." if self.demo else "\nCurrent source: explicitly approved local knowledge. Only cited retrieved facts are known. Use account tools to discover their availability; never assume a connected account.")
         try:
             today = datetime.now(ZoneInfo('Asia/Colombo')).date().isoformat()
